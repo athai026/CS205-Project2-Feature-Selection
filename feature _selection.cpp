@@ -108,15 +108,24 @@ void forward_selection(vector<vector<float>>& data, int numFeatures, int numRows
     best_features.clear();
     cout << "Beginning search." << endl << endl;
     for (int i = 1; i <= numFeatures; ++i) { //for each level
+        vector<pair<set<int>, float>> possible_sets_private;
+
+        #pragma omp parallel for private(added_feature, feature_set) shared(possible_sets_private)
         for (int j = 1; j <= numFeatures; ++j) { //for each feature
             added_feature.clear();
             added_feature = best_features; //best feature set from previous level
             if (!added_feature.count(j)) { //if feature not already in set
                 added_feature.insert(j); //add that feature
                 feature_set = make_pair(added_feature, LOO_cross_validation(data, numFeatures, numRows, added_feature)); //find accuracy of added feature j
-                possible_sets.push_back(feature_set); //add to list of all possible feature set combinations at level i
+                // possible_sets.push_back(feature_set); //add to list of all possible feature set combinations at level i
+
+                #pragma omp critical
+                possible_sets_private.push_back(feature_set);
             }
         }
+
+        #pragma omp critical
+        possible_sets.insert(possible_sets.end(), possible_sets_private.begin(), possible_sets_private.end());
     
         for (int i = 0; i < possible_sets.size(); ++i) {
             cout << "\tUsing feature(s) {";
@@ -170,14 +179,23 @@ void backward_elimination(vector<vector<float>>& data, int numFeatures, int numR
     possible_sets.clear();
     best_sets.push_back(feature_set); 
     for (int i = 1; i < numFeatures; ++i) { //for each level
+        vector<pair<set<int>, float>> possible_sets_private;
+
+        #pragma omp parallel for private(added_feature, feature_set) shared(possible_sets_private)
         for (int j = 1; j <= numFeatures; ++j) { //for each feature
             added_feature = best_features; //best feature set from previous level
             if (added_feature.count(j)) { //if feature already in set
                 added_feature.erase(j); //remove from set
                 feature_set = make_pair(added_feature, LOO_cross_validation(data, numFeatures, numRows, added_feature)); //find accuracy without feature j
-                possible_sets.push_back(feature_set); //add to list of all possible feature set combinations at level i
+                // possible_sets.push_back(feature_set); //add to list of all possible feature set combinations at level i
+
+                #pragma omp critical
+                possible_sets_private.push_back(feature_set);
             }
         }
+
+        #pragma omp critical
+        possible_sets.insert(possible_sets.end(), possible_sets_private.begin(), possible_sets_private.end());
 
         for (int i = 0; i < possible_sets.size(); ++i) {
             cout << "\tUsing feature(s) {";
